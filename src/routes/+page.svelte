@@ -32,12 +32,12 @@
 			}
 
 		});
-		let { downloadUrl } = await response.json();
+		let { link } = await response.json();
 		console.log(response)
-		if (!downloadUrl) {
+		if (!link) {
 			return;
 		}
-		a.href = downloadUrl;
+		a.href = link;
 		a.download = track.name + '.mp3';
 		a.click();
 
