@@ -1,6 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { init } from '$lib/yt';
 
 	let activeTab = $state('home');
 	let searchTimeoutID = $state(null);
@@ -8,10 +9,9 @@
 	let searchSongs = $state([]);
 	let searchAlbums = $state([]);
 	let searchArtists = $state([]);
+	let isSearching = $state(false);
 
 	const recentlyPlayed = $state([]);
-	const recommendations = $state([]);
-	const topCharts = $state([]);
 
 	function clearSearch() {
 		searchQuery = '';
@@ -22,8 +22,6 @@
 	}
 
 	async function download(track) {
-		// window.location = `https://www.youtube.com/watch?v=${track.videoId}`;
-		// return;
 		let response = await fetch('https://youtube-mp36.p.rapidapi.com/dl?id=' + `${track.videoId}`, {
 			method: 'GET',
     		headers: {
@@ -33,7 +31,7 @@
 
 		});
 		let { link } = await response.json();
-		console.log(response)
+
 		if (!link) {
 			return;
 		}
@@ -47,25 +45,45 @@
 
 	async function handleSearch() {
 		if (!searchQuery) {
+			isSearching = false;
 			return;
 		}
+		isSearching = true;
 		searchAlbums = [];
 		searchArtists = [];
 		searchSongs = [];
-		let response = await fetch('/api', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ searchQuery })
-		});
-		let { artists, albums, songs } = await response.json();
+		try {
+			let response = await fetch('/api', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ searchQuery })
+			});
+			let { artists, albums, songs } = await response.json();
 
-		searchArtists = artists;
-		searchAlbums = albums;
-		searchSongs = songs;
+			searchArtists = artists;
+			searchAlbums = albums;
+			searchSongs = songs;
+		} catch (e) {
+			console.error('Search error', e);
+		} finally {
+			isSearching = false;
+		}
 	}
 
+	$effect(() => {
+		if (searchQuery.trim() === '') {
+			searchAlbums = []
+			searchArtists = []
+			searchSongs = []
+			isSearching = false;
+		}
+	})
+
+	onMount(async () => {
+		await init()
+	})
 	
 </script>
 
@@ -112,6 +130,7 @@
 				placeholder="Search tracks, artists, albums..."
 				class="search-input"
 				onkeydown={async (e) => {
+					isSearching = true;
 					if (e.key === 'Enter') {
 						await handleSearch();
 					}
@@ -223,99 +242,106 @@
 			{/if}
 		</div>
 	{:else}
-		<div>
-			<!-- Results Container -->
-			<div class="scroll-container flex-1 pb-24">
-				<!-- Artists Carousel -->
-				<div class="mb-8">
-					<div class="mb-4 flex items-center justify-between px-6">
-						<h2 class="text-sm font-medium tracking-wide">ARTISTS</h2>
-						<button class="text-xs text-neutral-500">See all</button>
-					</div>
-					<div class="carousel-container">
-						<div class="carousel-track px-6">
-							{#each searchArtists as artist}
-								<button class="carousel-item-artist flex-shrink-0">
-									<div
-										class="mb-3 h-28 w-28 overflow-hidden rounded-full bg-neutral-900 transition-all active:scale-95"
-									>
-										<img src={artist.thumbnails.at(-1).url} alt={artist.name} />
-									</div>
-									<div class="w-28 truncate text-center text-sm font-medium">{artist.name}</div>
-									<!-- <div class="text-center text-xs text-neutral-500">{artist.followers}</div> -->
-								</button>
-							{/each}
+		{#if isSearching}
+			<div class="search-loading scroll-container flex-1 pb-24 flex items-center justify-center">
+				<div class="spinner" aria-hidden="true"></div>
+				<div class="ml-3 text-sm text-neutral-500">Searching…</div>
+			</div>
+		{:else}
+			<div>
+				<!-- Results Container -->
+				<div class="scroll-container flex-1 pb-24">
+					<!-- Artists Carousel -->
+					<div class="mb-8">
+						<div class="mb-4 flex items-center justify-between px-6">
+							<h2 class="text-sm font-medium tracking-wide">ARTISTS</h2>
+							<button class="text-xs text-neutral-500">See all</button>
 						</div>
-					</div>
-				</div>
-
-				<!-- Albums Carousel -->
-				<div class="mb-8">
-					<div class="mb-4 flex items-center justify-between px-6">
-						<h2 class="text-sm font-medium tracking-wide">ALBUMS</h2>
-						<button class="text-xs text-neutral-500">See all</button>
-					</div>
-					<div class="carousel-container">
-						<div class="carousel-track px-6">
-							{#each searchAlbums as album}
-								<button class="carousel-item-album flex-shrink-0">
-									<div
-										class="mb-3 h-36 w-36 overflow-hidden rounded bg-neutral-900 transition-all active:scale-95"
-									>
-										<img src={album.thumbnails.at(-1).url} alt={album.name} />
-									</div>
-									<div class="w-36 truncate text-sm font-medium">{album.name}</div>
-									<div class="w-36 truncate text-xs text-neutral-500">
-										{album.artist} • {album.year}
-									</div>
-								</button>
-							{/each}
-						</div>
-					</div>
-				</div>
-
-				<!-- Songs Grid -->
-				<div class="px-6">
-					<div class="mb-4 flex items-center justify-between">
-						<h2 class="text-sm font-medium tracking-wide">SONGS</h2>
-					</div>
-					<div class="space-y-1">
-						{#each searchSongs as track, index}
-							<div class="track-item flex w-full items-center gap-3 rounded-sm py-2.5 text-left">
-								<div
-									class="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-neutral-900"
-								>
-									<!-- <svg class="h-4 w-4 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
-										<path
-											d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
-										/>
-									</svg> -->
-									<img
-										src={track.type === 'song' ? track.thumbnails.at(-1).url : track.thumbnails.url}
-										alt={track.name}
-									/>
-								</div>
-								<div class="min-w-0 flex-1">
-									<div class="truncate text-sm font-medium">{track.name}</div>
-									<div class="truncate text-xs text-neutral-500">
-										{track.type !== 'song' ? track.author : track.artist.name}
-									</div>
-								</div>
-								<div class="flex-shrink-0 text-xs text-neutral-400">
-									<button
-										onclick={async () => {
-											await download(track);
-										}}
-									>
-										DOWNLOAD
+						<div class="carousel-container">
+							<div class="carousel-track px-6">
+								{#each searchArtists as artist}
+									<button class="carousel-item-artist flex-shrink-0">
+										<div
+											class="mb-3 h-28 w-28 overflow-hidden rounded-full bg-neutral-900 transition-all active:scale-95"
+										>
+											<img src={artist.thumbnails.at(-1).url} alt={artist.name} />
+										</div>
+										<div class="w-28 truncate text-center text-sm font-medium">{artist.name}</div>
+										<!-- <div class="text-center text-xs text-neutral-500">{artist.followers}</div> -->
 									</button>
-								</div>
+								{/each}
 							</div>
-						{/each}
+						</div>
+					</div>
+
+					<!-- Albums Carousel -->
+					<div class="mb-8">
+						<div class="mb-4 flex items-center justify-between px-6">
+							<h2 class="text-sm font-medium tracking-wide">ALBUMS</h2>
+							<button class="text-xs text-neutral-500">See all</button>
+						</div>
+						<div class="carousel-container">
+							<div class="carousel-track px-6">
+								{#each searchAlbums as album}
+									<button class="carousel-item-album flex-shrink-0">
+										<div
+											class="mb-3 h-36 w-36 overflow-hidden rounded bg-neutral-900 transition-all active:scale-95"
+										>
+											<img src={album.thumbnails.at(-1).url} alt={album.name} />
+										</div>
+										<div class="w-36 truncate text-sm font-medium">{album.name}</div>
+										<div class="w-36 truncate text-xs text-neutral-500">
+											{album.artist} • {album.year}
+										</div>
+									</button>
+								{/each}
+							</div>
+						</div>
+					</div>
+
+					<!-- Songs Grid -->
+					<div class="px-6">
+						<div class="mb-4 flex items-center justify-between">
+							<h2 class="text-sm font-medium tracking-wide">SONGS</h2>
+						</div>
+						<div class="space-y-1">
+							{#each searchSongs as track, index}
+								<div class="track-item flex w-full items-center gap-3 rounded-sm py-2.5 text-left">
+									<div
+										class="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-neutral-900"
+									>
+										<!-- <svg class="h-4 w-4 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
+											<path
+												d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
+											/>
+										</svg> -->
+										<img
+											src={track.type === 'song' ? track.thumbnails.at(-1).url : track.thumbnails.url}
+											alt={track.name}
+										/>
+									</div>
+									<div class="min-w-0 flex-1">
+										<div class="truncate text-sm font-medium">{track.name}</div>
+										<div class="truncate text-xs text-neutral-500">
+											{track.type !== 'song' ? track.author : track.artist.name}
+										</div>
+									</div>
+									<div class="flex-shrink-0 text-xs text-neutral-400">
+										<button
+											onclick={async () => {
+												await download(track);
+											}}
+										>
+											DOWNLOAD
+										</button>
+									</div>
+								</div>
+							{/each}
+						</div>
 					</div>
 				</div>
 			</div>
-		</div>
+		{/if}
 	{/if}
 	<!-- Bottom Navigation -->
 	<div
@@ -385,315 +411,3 @@
 		</div>
 	</div>
 </div>
-
-<style>
-	:global(*) {
-		font-family: 'Work Sans', sans-serif;
-	}
-
-	:global(:root) {
-		--bg-primary: #0a0a0a;
-		--bg-secondary: #141414;
-		--bg-tertiary: #1a1a1a;
-		--text-primary: #ffffff;
-		--text-secondary: #a3a3a3;
-		--text-tertiary: #525252;
-		--accent: #ffffff;
-		--border: #262626;
-	}
-
-	:global(body) {
-		background: var(--bg-primary);
-		color: var(--text-primary);
-		margin: 0;
-		padding: 0;
-		overflow-x: hidden;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.btn-icon {
-		width: 48px;
-		height: 48px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 50%;
-		transition: all 0.2s ease;
-		cursor: pointer;
-		user-select: none;
-		touch-action: manipulation;
-		border: none;
-		background: transparent;
-		color: inherit;
-	}
-
-	.btn-icon:active {
-		transform: scale(0.95);
-	}
-
-	.search-container {
-		position: relative;
-		display: flex;
-		align-items: center;
-	}
-
-	.search-icon {
-		position: absolute;
-		left: 16px;
-		width: 18px;
-		height: 18px;
-		color: var(--text-tertiary);
-		pointer-events: none;
-	}
-
-	.search-input {
-		width: 100%;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 12px 44px;
-		font-size: 14px;
-		color: var(--text-primary);
-		transition: all 0.2s ease;
-		outline: none;
-	}
-
-	.search-input::placeholder {
-		color: var(--text-tertiary);
-	}
-
-	.search-input:focus {
-		background: var(--bg-tertiary);
-		border-color: rgba(255, 255, 255, 0.1);
-	}
-
-	.clear-btn {
-		position: absolute;
-		right: 12px;
-		width: 28px;
-		height: 28px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 50%;
-		background: transparent;
-		border: none;
-		color: var(--text-tertiary);
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.clear-btn:hover {
-		background: rgba(255, 255, 255, 0.05);
-		color: var(--text-secondary);
-	}
-
-	.clear-btn:active {
-		transform: scale(0.9);
-	}
-
-	.tab-btn {
-		padding: 8px 16px;
-		border-radius: 20px;
-		border: none;
-		background: transparent;
-		color: var(--text-secondary);
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		white-space: nowrap;
-	}
-
-	.tab-btn.active {
-		background: rgba(255, 255, 255, 0.08);
-		color: var(--text-primary);
-	}
-
-	.tab-btn:active {
-		transform: scale(0.96);
-	}
-
-	.fade-in {
-		animation: fadeIn 0.4s ease-out forwards;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-			transform: translateY(8px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.scroll-container {
-		overflow-y: auto;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: none;
-	}
-
-	.scroll-container::-webkit-scrollbar {
-		display: none;
-	}
-
-	.horizontal-scroll {
-		display: flex;
-		gap: 12px;
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: none;
-		padding-bottom: 8px;
-	}
-
-	.horizontal-scroll::-webkit-scrollbar {
-		display: none;
-	}
-
-	.album-card {
-		flex-shrink: 0;
-		width: 140px;
-		cursor: pointer;
-		transition: transform 0.2s ease;
-		background: transparent;
-		border: none;
-		color: inherit;
-		text-align: left;
-		padding: 0;
-	}
-
-	.album-card:active {
-		transform: scale(0.97);
-	}
-
-	.album-art-small {
-		width: 140px;
-		height: 140px;
-		background: linear-gradient(135deg, #262626 0%, #171717 100%);
-		border-radius: 4px;
-		position: relative;
-		overflow: hidden;
-	}
-
-	.album-art-small::before {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
-	}
-
-	.empty-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		text-align: center;
-		padding: 40px 20px;
-	}
-
-	.chart-item {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 8px 12px;
-		border-radius: 6px;
-		cursor: pointer;
-		transition: background 0.15s ease;
-		background: transparent;
-		border: none;
-		color: inherit;
-		width: 100%;
-		text-align: left;
-	}
-
-	.chart-item:active {
-		background: rgba(255, 255, 255, 0.03);
-	}
-
-	.chart-number {
-		width: 24px;
-		text-align: center;
-		font-size: 14px;
-		font-weight: 500;
-		color: var(--text-tertiary);
-		flex-shrink: 0;
-	}
-
-	.nav-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 4px;
-		color: var(--text-tertiary);
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		padding: 8px 12px;
-		border-radius: 8px;
-	}
-
-	.nav-btn.active {
-		color: var(--text-primary);
-	}
-
-	.nav-btn:active {
-		transform: scale(0.95);
-		background: rgba(255, 255, 255, 0.03);
-	}
-
-	.safe-area-bottom {
-		padding-bottom: env(safe-area-inset-bottom, 0px);
-	}
-
-	.carousel-container {
-		overflow: hidden;
-	}
-
-	.carousel-track {
-		display: flex;
-		gap: 1rem;
-		overflow-x: auto;
-		overflow-y: hidden;
-		scroll-snap-type: x mandatory;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: none;
-		padding-bottom: 0.5rem;
-	}
-
-	.carousel-track::-webkit-scrollbar {
-		display: none;
-	}
-
-	.carousel-item-artist {
-		scroll-snap-align: start;
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		touch-action: manipulation;
-		color: inherit;
-		padding: 0;
-	}
-
-	.carousel-item-album {
-		scroll-snap-align: start;
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		touch-action: manipulation;
-		color: inherit;
-		padding: 0;
-	}
-
-	input[type='text'] {
-		-webkit-appearance: none;
-		appearance: none;
-	}
-
-	input[type='text']::placeholder {
-		color: #737373;
-	}
-</style>
