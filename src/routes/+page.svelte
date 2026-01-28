@@ -37,6 +37,7 @@
 		if (!link) {
 			return;
 		}
+		const a = document.createElement('a')
 		a.href = link;
 		a.download = track.name + '.mp3';
 		a.click();
