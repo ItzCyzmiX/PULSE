@@ -1,5 +1,6 @@
 <script>
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
 	let activeTab = $state('home');
 	let searchTimeoutID = $state(null);
@@ -23,16 +24,16 @@
 	async function download(track) {
 		// window.location = `https://www.youtube.com/watch?v=${track.videoId}`;
 		// return;
-		let response = await fetch('https://youtube-mp310.p.rapidapi.com/download/mp3?url=' + `https://www.youtube.com/watch?v=${track.videoId}`, {
+		let response = await fetch('https://youtube-mp36.p.rapidapi.com/dl?id=' + `${track.videoId}`, {
 			method: 'GET',
-    headers: {
-			'x-rapidapi-key': '4b5f2611d2msh0d8803f54bf50a5p181e74jsnc7c6cdcf3ed3',
-			'x-rapidapi-host': 'youtube-mp310.p.rapidapi.com',
+    		headers: {
+				'x-rapidapi-key': '4b5f2611d2msh0d8803f54bf50a5p181e74jsnc7c6cdcf3ed3',
+				'x-rapidapi-host': 'youtube-mp36.p.rapidapi.com'
 			}
 
 		});
 		let { downloadUrl } = await response.json();
-		window.location = downloadUrl
+		console.log(response)
 		if (!downloadUrl) {
 			return;
 		}
@@ -63,6 +64,8 @@
 		searchAlbums = albums;
 		searchSongs = songs;
 	}
+
+	
 </script>
 
 <div class="mx-auto flex min-h-screen max-w-md flex-col pb-20">
