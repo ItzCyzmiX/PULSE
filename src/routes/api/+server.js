@@ -12,7 +12,6 @@ export async function POST({ request }) {
 		);
 		results['artists'] = response.content.filter((r) => r.type === 'artist');
 		results['albums'] = response.content.filter((r) => r.type === 'album' || r.type === 'playlist');
-
 	} catch (error) {
 		console.error('Error searching:', error);
 		return json({

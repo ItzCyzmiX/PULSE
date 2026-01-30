@@ -11,6 +11,8 @@
 	let searchArtists = $state([]);
 	let isSearching = $state(false);
 
+	let currentAudio = $state(null);
+
 	const recentlyPlayed = $state([]);
 
 	function clearSearch() {
@@ -24,23 +26,37 @@
 	async function download(track) {
 		let response = await fetch('https://youtube-mp36.p.rapidapi.com/dl?id=' + `${track.videoId}`, {
 			method: 'GET',
-    		headers: {
+			headers: {
 				'x-rapidapi-key': '4b5f2611d2msh0d8803f54bf50a5p181e74jsnc7c6cdcf3ed3',
 				'x-rapidapi-host': 'youtube-mp36.p.rapidapi.com'
 			}
-
 		});
 		let { link } = await response.json();
 
 		if (!link) {
 			return;
 		}
-		const a = document.createElement('a')
+		const a = document.createElement('a');
 		a.href = link;
 		a.download = track.name + '.mp3';
 		a.click();
 
 		URL.revokeObjectURL(url);
+	}
+
+	async function play(track) {
+		let response = await fetch('/playback', {
+			method: 'POST',
+			body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${track.videoId}` })
+		});
+		let data = await response.json();
+		let url = data.playback_link;
+		if (currentAudio) {
+			currentAudio.pause();
+			currentAudio = null;
+		}
+		currentAudio = new Audio(url);
+		currentAudio.play();
 	}
 
 	async function handleSearch() {
@@ -74,17 +90,16 @@
 
 	$effect(() => {
 		if (searchQuery.trim() === '') {
-			searchAlbums = []
-			searchArtists = []
-			searchSongs = []
+			searchAlbums = [];
+			searchArtists = [];
+			searchSongs = [];
 			isSearching = false;
 		}
-	})
+	});
 
 	onMount(async () => {
-		await init()
-	})
-	
+		await init();
+	});
 </script>
 
 <div class="mx-auto flex min-h-screen max-w-md flex-col pb-20">
@@ -241,107 +256,112 @@
 				</div>
 			{/if}
 		</div>
+	{:else if isSearching}
+		<div class="search-loading scroll-container flex flex-1 items-center justify-center pb-24">
+			<div class="spinner" aria-hidden="true"></div>
+			<div class="ml-3 text-sm text-neutral-500">Searching…</div>
+		</div>
 	{:else}
-		{#if isSearching}
-			<div class="search-loading scroll-container flex-1 pb-24 flex items-center justify-center">
-				<div class="spinner" aria-hidden="true"></div>
-				<div class="ml-3 text-sm text-neutral-500">Searching…</div>
-			</div>
-		{:else}
-			<div>
-				<!-- Results Container -->
-				<div class="scroll-container flex-1 pb-24">
-					<!-- Artists Carousel -->
-					<div class="mb-8">
-						<div class="mb-4 flex items-center justify-between px-6">
-							<h2 class="text-sm font-medium tracking-wide">ARTISTS</h2>
-							<button class="text-xs text-neutral-500">See all</button>
-						</div>
-						<div class="carousel-container">
-							<div class="carousel-track px-6">
-								{#each searchArtists as artist}
-									<button class="carousel-item-artist flex-shrink-0">
-										<div
-											class="mb-3 h-28 w-28 overflow-hidden rounded-full bg-neutral-900 transition-all active:scale-95"
-										>
-											<img src={artist.thumbnails.at(-1).url} alt={artist.name} />
-										</div>
-										<div class="w-28 truncate text-center text-sm font-medium">{artist.name}</div>
-										<!-- <div class="text-center text-xs text-neutral-500">{artist.followers}</div> -->
-									</button>
-								{/each}
-							</div>
-						</div>
+		<div>
+			<!-- Results Container -->
+			<div class="scroll-container flex-1 pb-24">
+				<!-- Artists Carousel -->
+				<div class="mb-8">
+					<div class="mb-4 flex items-center justify-between px-6">
+						<h2 class="text-sm font-medium tracking-wide">ARTISTS</h2>
+						<button class="text-xs text-neutral-500">See all</button>
 					</div>
-
-					<!-- Albums Carousel -->
-					<div class="mb-8">
-						<div class="mb-4 flex items-center justify-between px-6">
-							<h2 class="text-sm font-medium tracking-wide">ALBUMS</h2>
-							<button class="text-xs text-neutral-500">See all</button>
-						</div>
-						<div class="carousel-container">
-							<div class="carousel-track px-6">
-								{#each searchAlbums as album}
-									<button class="carousel-item-album flex-shrink-0">
-										<div
-											class="mb-3 h-36 w-36 overflow-hidden rounded bg-neutral-900 transition-all active:scale-95"
-										>
-											<img src={album.thumbnails.at(-1).url} alt={album.name} />
-										</div>
-										<div class="w-36 truncate text-sm font-medium">{album.name}</div>
-										<div class="w-36 truncate text-xs text-neutral-500">
-											{album.artist} • {album.year}
-										</div>
-									</button>
-								{/each}
-							</div>
-						</div>
-					</div>
-
-					<!-- Songs Grid -->
-					<div class="px-6">
-						<div class="mb-4 flex items-center justify-between">
-							<h2 class="text-sm font-medium tracking-wide">SONGS</h2>
-						</div>
-						<div class="space-y-1">
-							{#each searchSongs as track, index}
-								<div class="track-item flex w-full items-center gap-3 rounded-sm py-2.5 text-left">
+					<div class="carousel-container">
+						<div class="carousel-track px-6">
+							{#each searchArtists as artist}
+								<button class="carousel-item-artist flex-shrink-0">
 									<div
-										class="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-neutral-900"
+										class="mb-3 h-28 w-28 overflow-hidden rounded-full bg-neutral-900 transition-all active:scale-95"
 									>
-										<!-- <svg class="h-4 w-4 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
-											<path
-												d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
-											/>
-										</svg> -->
-										<img
-											src={track.type === 'song' ? track.thumbnails.at(-1).url : track.thumbnails.url}
-											alt={track.name}
-										/>
+										<img src={artist.thumbnails.at(-1).url} alt={artist.name} />
 									</div>
-									<div class="min-w-0 flex-1">
-										<div class="truncate text-sm font-medium">{track.name}</div>
-										<div class="truncate text-xs text-neutral-500">
-											{track.type !== 'song' ? track.author : track.artist.name}
-										</div>
-									</div>
-									<div class="flex-shrink-0 text-xs text-neutral-400">
-										<button
-											onclick={async () => {
-												await download(track);
-											}}
-										>
-											DOWNLOAD
-										</button>
-									</div>
-								</div>
+									<div class="w-28 truncate text-center text-sm font-medium">{artist.name}</div>
+									<!-- <div class="text-center text-xs text-neutral-500">{artist.followers}</div> -->
+								</button>
 							{/each}
 						</div>
 					</div>
 				</div>
+
+				<!-- Albums Carousel -->
+				<div class="mb-8">
+					<div class="mb-4 flex items-center justify-between px-6">
+						<h2 class="text-sm font-medium tracking-wide">ALBUMS</h2>
+						<button class="text-xs text-neutral-500">See all</button>
+					</div>
+					<div class="carousel-container">
+						<div class="carousel-track px-6">
+							{#each searchAlbums as album}
+								<button class="carousel-item-album flex-shrink-0">
+									<div
+										class="mb-3 h-36 w-36 overflow-hidden rounded bg-neutral-900 transition-all active:scale-95"
+									>
+										<img src={album.thumbnails.at(-1).url} alt={album.name} />
+									</div>
+									<div class="w-36 truncate text-sm font-medium">{album.name}</div>
+									<div class="w-36 truncate text-xs text-neutral-500">
+										{album.artist} • {album.year}
+									</div>
+								</button>
+							{/each}
+						</div>
+					</div>
+				</div>
+
+				<!-- Songs Grid -->
+				<div class="px-6">
+					<div class="mb-4 flex items-center justify-between">
+						<h2 class="text-sm font-medium tracking-wide">SONGS</h2>
+					</div>
+					<div class="space-y-1">
+						{#each searchSongs as track, index}
+							<div class="track-item flex w-full items-center gap-3 rounded-sm py-2.5 text-left">
+								<div
+									class="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-neutral-900"
+								>
+									<!-- <svg class="h-4 w-4 text-neutral-600" fill="currentColor" viewBox="0 0 24 24">
+											<path
+												d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"
+											/>
+										</svg> -->
+									<img
+										src={track.type === 'song' ? track.thumbnails.at(-1).url : track.thumbnails.url}
+										alt={track.name}
+									/>
+								</div>
+								<div class="min-w-0 flex-1">
+									<div class="truncate text-sm font-medium">{track.name}</div>
+									<div class="truncate text-xs text-neutral-500">
+										{track.type !== 'song' ? track.author : track.artist.name}
+									</div>
+								</div>
+								<div class="flex-shrink-0 text-xs text-neutral-400">
+									<button
+										onclick={async () => {
+											await download(track);
+										}}
+									>
+										DOWNLOAD
+									</button>
+									<button
+										onclick={async () => {
+											await play(track);
+										}}
+									>
+										PLAY
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
 			</div>
-		{/if}
+		</div>
 	{/if}
 	<!-- Bottom Navigation -->
 	<div
