@@ -49,6 +49,7 @@
 			method: 'PUT',
 			body: JSON.stringify({ id: track.videoId })
 		});
+		console.log(response);
 		let url = await response.text();
 		if (currentAudio) {
 			currentAudio.pause();
