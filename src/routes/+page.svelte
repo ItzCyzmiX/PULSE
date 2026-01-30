@@ -45,17 +45,17 @@
 	}
 
 	async function play(track) {
-		let response = await fetch('https://streamurl.up.railway.app', {
-			method: 'PUT',
+		let response = await fetch('/playback', {
+			method: 'POST',
 			body: JSON.stringify({ id: track.videoId })
 		});
 		console.log(response);
-		let url = await response.text();
+		let {playback_link} = await response.json()
 		if (currentAudio) {
 			currentAudio.pause();
 			currentAudio = null;
 		}
-		currentAudio = new Audio(url);
+		currentAudio = new Audio(playback_link);
 		currentAudio.play();
 	}
 
